@@ -361,9 +361,10 @@ export function getLiveStreamStatus(): LiveStreamStatus {
 
 export function cancelForge() {
     if (!activeTask) return;
-    const prev = activeTask.state;
-    activeTask.cancelled = true;
-    activeTask.stopStream?.();
+    const task = activeTask;
+    const prev = task.state;
+    task.cancelled = true;
+    task.stopStream?.();
     setDebugRunningGame(null);
     setTaskState({
         ...prev,
@@ -373,7 +374,7 @@ export function cancelForge() {
         text: "Session cancelled."
     });
     setTimeout(() => {
-        if (activeTask?.cancelled) {
+        if (activeTask === task && task.cancelled) {
             activeTask = null;
             notify();
         }
@@ -386,6 +387,11 @@ export async function startVarietyForge(targetThreshold: number, currentCount = 
         return;
     }
     if (activeTask?.state.running) throw new Error("A Vencorfy session is already running.");
+    const accountId = UserStore.getCurrentUser()?.id;
+    if (!accountId) {
+        safeToast("Discord account identity is unavailable; cannot start a session.", "critical");
+        return;
+    }
 
     const meta = resolveTierMeta("variety", tier);
     widgetHidden = false;
@@ -412,8 +418,7 @@ export async function startVarietyForge(targetThreshold: number, currentCount = 
         const { selectedGames, newUsedGames } = selectGames(games, needed, used);
         if (!selectedGames.length) throw new Error("Could not select games from catalogue.");
 
-        const userId = UserStore.getCurrentUser()?.id ?? "";
-        const fallbackFp = await generateFingerprint(userId);
+        const fallbackFp = await generateFingerprint(accountId);
         const batchSize = clamp(settings.store.batchSize, 1, 50);
         const delayMs = clamp(settings.store.batchDelay, 500, 30000);
         const durationMs = clamp(settings.store.varietyMinutes, 1, 30) * 60_000;
@@ -435,7 +440,7 @@ export async function startVarietyForge(targetThreshold: number, currentCount = 
             setDebugRunningGame(slice[0]);
 
             const events = slice.flatMap(g => buildGameSessionEvents(g, durationMs, fallbackFp));
-            await postScience(events);
+            await postScience(events, accountId, () => task.cancelled);
 
             completed += slice.length;
             const pct = Math.min(95, Math.round((completed / total) * 95));
@@ -470,6 +475,7 @@ export async function startVarietyForge(targetThreshold: number, currentCount = 
         });
         safeToast(doneMsg, "success");
     } catch (e: any) {
+        if (task.cancelled || activeTask !== task) return;
         setDebugRunningGame(null);
         const msg = e?.message || "Failed to complete Game Variety session";
         widgetHidden = false;
@@ -491,6 +497,11 @@ export async function startTimeForge(hoursToAdd: number, specificGame?: Game | n
         return;
     }
     if (activeTask?.state.running) throw new Error("A Vencorfy session is already running.");
+    const accountId = UserStore.getCurrentUser()?.id;
+    if (!accountId) {
+        safeToast("Discord account identity is unavailable; cannot start a session.", "critical");
+        return;
+    }
 
     const meta = resolveTierMeta("time", tier);
     widgetHidden = false;
@@ -531,8 +542,7 @@ export async function startTimeForge(hoursToAdd: number, specificGame?: Game | n
 
         if (!sessionGames.length) throw new Error("Could not select games for Game Time.");
 
-        const userId = UserStore.getCurrentUser()?.id ?? "";
-        const fallbackFp = await generateFingerprint(userId);
+        const fallbackFp = await generateFingerprint(accountId);
         const batchSize = clamp(settings.store.batchSize, 1, 50);
         const delayMs = clamp(settings.store.batchDelay, 500, 30000);
 
@@ -560,7 +570,7 @@ export async function startTimeForge(hoursToAdd: number, specificGame?: Game | n
                 return buildGameSessionEvents(g, sessionDurationMs, fallbackFp, cursor);
             });
 
-            await postScience(events);
+            await postScience(events, accountId, () => task.cancelled);
 
             sessionsDone += slice.length;
             const claimedHours = sessionsDone * hoursPerSession;
@@ -599,6 +609,7 @@ export async function startTimeForge(hoursToAdd: number, specificGame?: Game | n
         });
         safeToast(doneMsg, "success");
     } catch (e: any) {
+        if (task.cancelled || activeTask !== task) return;
         setDebugRunningGame(null);
         const msg = e?.message || "Failed to complete Game Time session";
         widgetHidden = false;
@@ -620,6 +631,11 @@ export async function startStreamForge(hoursToAdd: number, tier?: Tier) {
         return;
     }
     if (activeTask?.state.running) throw new Error("A Vencorfy session is already running.");
+    const accountId = UserStore.getCurrentUser()?.id;
+    if (!accountId) {
+        safeToast("Discord account identity is unavailable; cannot start a session.", "critical");
+        return;
+    }
 
     const initialLive = getLiveStreamStatus();
     if (!initialLive.isLive) {
@@ -687,7 +703,7 @@ export async function startStreamForge(hoursToAdd: number, tier?: Tier) {
         await postScience([
             makeStreamEvent("media_session_joined", startInfo.props, {}),
             makeStreamEvent("video_stream_started", startInfo.props, {})
-        ]);
+        ], accountId, () => task.cancelled);
 
         let creditedHours = 0;
 
@@ -725,7 +741,7 @@ export async function startStreamForge(hoursToAdd: number, tier?: Tier) {
                     duration_tracked_ms: durationTrackedMs,
                     total_duration_ms: totalDurationMs
                 })
-            ]);
+            ], accountId, () => task.cancelled);
 
             creditedHours = Math.min(targetHours, Number((creditedHours + claimHours).toFixed(2)));
             await addStats(0, 0, claimHours);
@@ -756,6 +772,8 @@ export async function startStreamForge(hoursToAdd: number, tier?: Tier) {
             }
         }
 
+        if (task.cancelled) return;
+
         const endInfo = getStreamProps();
         const finalDurationMs = Math.round(creditedHours * 3_600_000);
 
@@ -763,7 +781,7 @@ export async function startStreamForge(hoursToAdd: number, tier?: Tier) {
             makeStreamEvent("video_stream_ended", endInfo.props, {
                 duration_ms: finalDurationMs
             })
-        ]);
+        ], accountId, () => task.cancelled);
 
         if (task.cancelled) return;
 
@@ -779,6 +797,7 @@ export async function startStreamForge(hoursToAdd: number, tier?: Tier) {
         });
         safeToast(doneMsg, "success");
     } catch (e: any) {
+        if (task.cancelled || activeTask !== task) return;
         const msg = e?.message || "Failed to complete Streaming session";
         widgetHidden = false;
         setTaskState({

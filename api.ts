@@ -7,7 +7,7 @@
 import { Logger } from "@utils/Logger";
 import { sleep } from "@utils/misc";
 import { findByPropsLazy, findStoreLazy } from "@webpack";
-import { RestAPI } from "@webpack/common";
+import { RestAPI, UserStore } from "@webpack/common";
 
 import { clamp, settings } from "./settings";
 import { BadgeKind, CATEGORIES } from "./tiers";
@@ -42,18 +42,22 @@ const ADULT_WORDS = ["sex", "hentai", "porn", "fap", "nsfw", "nude", "naked", "l
 
 let analyticsToken = "";
 let analyticsTokenAt = 0;
+let analyticsTokenOwnerId = "";
 let catalogue: Game[] | null = null;
 let sequence = Math.floor(Math.random() * 100_000);
 
-export async function getAnalyticsToken() {
-    if (analyticsToken && Date.now() - analyticsTokenAt < TOKEN_MAX_AGE) return analyticsToken;
+export async function getAnalyticsToken(accountId: string) {
+    if (analyticsToken && analyticsTokenOwnerId === accountId && Date.now() - analyticsTokenAt < TOKEN_MAX_AGE) return analyticsToken;
 
     const { body } = await RestAPI.get({ url: "/users/@me", query: { with_analytics_token: true } });
+    if (UserStore.getCurrentUser()?.id !== accountId) throw new Error("Discord account changed; session stopped.");
+    if (String(body?.id ?? "") !== accountId) throw new Error("Discord returned a different account; session stopped.");
     if (typeof body?.analytics_token !== "string")
         throw new Error("Discord returned no analytics_token. Check Privacy & Safety > \"Use data to improve Discord\".");
 
     analyticsToken = body.analytics_token;
     analyticsTokenAt = Date.now();
+    analyticsTokenOwnerId = accountId;
     return analyticsToken;
 }
 
@@ -84,13 +88,23 @@ export function realFingerprint(gameId: string) {
     }
 }
 
-export async function postScience(events: ScienceEvent[]) {
+export async function postScience(events: ScienceEvent[], accountId: string, isCancelled: () => boolean) {
+    const checkSession = () => {
+        if (isCancelled()) throw new Error("Session cancelled.");
+        if (!accountId || UserStore.getCurrentUser()?.id !== accountId)
+            throw new Error("Discord account changed; session stopped.");
+    };
+
     for (let attempt = 0; ; attempt++) {
+        checkSession();
         try {
-            const token = await getAnalyticsToken();
+            const token = await getAnalyticsToken(accountId);
+            checkSession();
             await RestAPI.post({ url: "/science", body: { token, events } });
+            checkSession();
             return;
         } catch (e: any) {
+            checkSession();
             const status = e?.status;
 
             if (status === 429 && attempt < 8) {
@@ -102,6 +116,7 @@ export async function postScience(events: ScienceEvent[]) {
 
             if (status === 401 || status === 403) {
                 analyticsToken = "";
+                analyticsTokenOwnerId = "";
                 if (attempt < 1) continue;
                 throw new Error(`Discord rejected the request (${status}). Try again later.`);
             }

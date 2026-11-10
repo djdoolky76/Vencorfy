@@ -26,6 +26,9 @@
 > [!WARNING]
 > **Required Discord Setting:** Ensure **"Use data to personalize my Discord experience"** is **ENABLED** in your Discord **User Settings → Data & Privacy (Privacy & Safety)** before running a session. If disabled, Discord ignores incoming telemetry activity.
 
+> [!CAUTION]
+> Vencorfy submits simulated activity events. Discord may reject them or restrict accounts for automation; a successful request does not guarantee badge credit. The plugin is disabled by default and sends no activity events until you start a session.
+
 ---
 
 ## ✨ Features
@@ -51,6 +54,8 @@
 
 ## 📦 Installation
 
+Vencorfy is already included in [djdoolky76/Vencord](https://github.com/djdoolky76/Vencord). In that fork, enable it under **User Settings → Vencord → Plugins**. For other Vencord forks, `src/userplugins` is the simplest installation path:
+
 > [!NOTE]
 > Installing custom plugins requires building Vencord (or Equicord) from source. Make sure you have [Git](https://git-scm.com/), [Node.js](https://nodejs.org/), and [pnpm](https://pnpm.io/) installed.
 
@@ -70,6 +75,15 @@
 3. **Enable the plugin in Discord:**
    - Restart or reload Discord (`Ctrl + R`).
    - Go to **User Settings → Vencord → Plugins**, search for **Vencorfy**, and toggle it **ON** (no client restart required).
+
+### Bundling into a fork's built-in plugins
+
+If you want Vencorfy tracked directly in your fork under `src/plugins/vencorfy` instead of `src/userplugins/vencorfy`, copy the plugin files there without the standalone repository's `.git` directory. Vencord's plugin-list generator requires built-in plugin authors to be entries in `Devs`, so make these two additional changes:
+
+1. Add `djdoolky76: { name: "djdoolky76", id: 546797199527247874n }` to the `Devs` object in `src/utils/constants.ts` (unless your fork already has it).
+2. In `src/plugins/vencorfy/index.tsx`, import `Devs` from `@utils/constants` and replace the `authors` value with `authors: [Devs.djdoolky76]`.
+
+Then run `pnpm build --dev` and `pnpm test` from the Vencord root. Keep the plugin files committed in your fork so future Vencord merges retain them. Updates to this standalone repository do not sync into forks automatically.
 
 ---
 

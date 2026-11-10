@@ -6,7 +6,6 @@
 
 import "./style.css";
 
-import { Devs } from "@utils/constants";
 import definePlugin from "@utils/types";
 
 import { cancelForge } from "./session";
@@ -17,12 +16,7 @@ import { startProgressWidget, stopProgressWidget } from "./widget";
 export default definePlugin({
     name: "Vencorfy",
     description: "Effortlessly simulate and progress your Discord profile badge stats across Game Variety, Game Time, and Streaming.",
-    authors: [
-        Devs.djdoolky76 ?? {
-            name: "djdoolky76",
-            id: 546797199527247874n
-        }
-    ],
+    authors: [{ name: "djdoolky76", id: 546797199527247874n }],
     tags: ["Activity", "Customisation", "Utility"],
     settings,
     toolboxActions: {
