@@ -114,7 +114,7 @@
 ## 🤝 Credits
 
 - **Author:** [djdoolky76](https://github.com/djdoolky76)
-- ** inspirations & Telemetry Research:**
+- **Inspirations & Telemetry Research:**
   - Badge dashboard concept inspired by **Badgeify** (`TANK49`).
   - Game session & streaming `/science` event schemas adapted from [aboveproof/BadgeFarmer](https://github.com/aboveproof/BadgeFarmer), [Accentaro/gameSessionSpoofer](https://github.com/Accentaro/gameSessionSpoofer), and [lawerth/discord-streamer](https://github.com/lawerth/discord-streamer).
 
